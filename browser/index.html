@@ -1,0 +1,259 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BIP39 Login App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 420px;
+        }
+
+        input,
+        select,
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-direction: row;
+            margin-top: 10px;
+        }
+
+        .password-wrapper {
+            position: relative;
+            display: block;
+            margin-top: 20px;
+        }
+
+        .password-wrapper input {
+            /*padding-right: 78px;*/
+        }
+
+        .toggle-btn {
+            position: relative;
+            right: 1px;
+            top: 50%;
+            background: #eef2ff;
+            border: 1px solid #c7d2fe;
+            color: #1e40af;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: #007bff;
+            color: white;
+            border: none;
+        }
+
+        button.primary:hover {
+            background: #0056b3
+        }
+
+        .small {
+            font-size: 13px;
+            color: #444;
+        }
+
+        .not-in-db-message {
+            color: #d32f2f;
+            font-size: 13px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        #urlConversionMessage {
+            font-size: 12px;
+            color: #333;
+            background: #e6f3ff;
+            padding: 5px 10px;
+            border-radius: 4px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+            display: none;
+            opacity: 1;
+            transition: opacity 0.5s ease-out;
+        }
+
+        #urlConversionMessage.fade-out {
+            opacity: 0;
+        }
+
+        .license-section {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .license-message {
+            font-size: 12px;
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .license-valid {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .license-invalid {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .license-verifying {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+    </style>
+</head>
+
+<body>
+    
+<div class="container">
+    <div class="license-section">
+        <h3>License Key</h3>
+        <textarea id="licenseKey" placeholder="Paste your PGP signed license key here (preserve line breaks)" rows="6" style="width: 100%; padding: 10px; margin-top: 10px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; resize: vertical;"></textarea>
+        <button class="primary" id="verifyLicenseBtn" style="margin-top: 10px;">Verify License</button>
+        <div id="licenseMessage" class="license-message"></div>
+    </div>
+        <h2>BIP39 Login</h2>
+        <button id="toggleLoginSection" class="primary">Hide BIP39 Login</button>
+        <div id="loginSection">
+            <div class="password-wrapper">
+                <input type="password" id="mnemonic" placeholder="Enter BIP39 Mnemonic" aria-label="mnemonic" />
+                <button class="toggle-btn" id="toggleMnemonic">Show</button>
+            </div>
+
+            <div class="password-wrapper">
+                <input type="password" id="passphrase" placeholder="Optional Passphrase" aria-label="passphrase" />
+                <button class="toggle-btn" id="togglePassphrase">Show</button>
+            </div>
+
+            <button class="primary" id="loginBtn">Login</button>
+
+            <h3>Import Auth Hash & Salt CSV</h3>
+            <input type="file" id="importAuthCsvInput" accept=".csv" />
+            <button id="importAuthCsvBtn" class="primary">Import Hash & Salt</button>
+        </div>
+
+        <div id="fields" style="display:none; margin-top:12px;">
+            <div style="background-color:#e6e9ed;">
+                <button style="color:red" id="clearHashBtn">Clear Stored Data  ⚠️</button>
+                <button id="exportAuthBtn">Export Auth Hash & Salt 🧂</button>
+                <button id="exportCsvBtn">Export as CSV ☁️</button>
+                <h3>Import Database CSV</h3>
+                <input type="file" id="importCsvInput" accept=".csv" />
+                <button id="importCsvBtn" class="primary">Import & Merge</button>
+            </div>
+
+            <h3>Password Generator</h3>
+
+            <input id="url" placeholder="URL (required)" />
+            <p id="urlConversionMessage"></p>
+            <input id="username" placeholder="Username" />
+            <input id="passwordIndex" placeholder="Password Index (required)" type="number" value="1" />
+            <input id="other" placeholder="Other (optional, single-spaces only)" />
+
+            <div class="radio-group" id="charTypeGroup">
+                <label><input type="radio" name="charType" value="password" checked /> Password</label>
+                <label><input type="radio" name="charType" value="ascii" /> Full ASCII</label>
+                <label><input type="radio" name="charType" value="pin" /> Pin</label>
+            </div>
+
+            <input id="passwordLength" type="number" value="20" placeholder="Password Length" readonly />
+
+            <button class="primary" id="generateBtn">Generate</button>
+
+            <div id="passwordResultContainer" style="display: none; margin-top: 15px;">
+                <input type="password" id="generatedPassword" readonly style="margin-bottom: 5px;" />
+                <p id="notInDbMessage" class="not-in-db-message">This password has not been saved to the database.</p>
+                <p id="savedToDbMessage" class="not-in-db-message">Successfully saved to the database.</p>
+                <div style="display: flex; gap: 10px;">
+                    <button id="copyBtn" class="primary" style="flex: 1;">Copy</button>
+                    <button id="showHideBtn" style="flex: 1;">Show</button>
+                </div>
+            </div>
+
+            <p class="small">All operations occur locally in your browser. Do not use with funds or situations requiring audited key management unless you understand the model.</p>
+        </div>
+    </div>
+
+    <!-- Include OpenPGP.js for license verification -->
+    <script src="openpgp.min.js"></script>
+    <script src="index-bundle.js" type="module" charset="utf-8"></script>
+    <script src="main.js"></script>
+</body>
+
+</html>
